@@ -73,15 +73,17 @@ def alpha_gauge_1loop(alpha0, mu0, mu, NC, NF,
     # largest mass
     assert len(masses) == NF, \
             "Need a mass for every flavor."
-    largest_mass = np.max(masses)
+    if masses is not None:
+        largest_mass = np.max(masses)
+        heaviest_flavor = np.argmax(masses)
+    else:
+        largest_mass = 0
 
     # If we are above the mass threshold, no change is needed
-    if mu >= largest_mass:
+    if mu >= largest_mass or largest_mass == 0:
         return alpha_gauge_1loop(alpha0, mu0, mu, NC, NF)
     # Otherwise, we need to integrate out the heaviest flavor
     else:
-        # Find the index of the heaviest flavor
-        heaviest_flavor = np.argmax(masses)
         # Remove the heaviest flavor from the list
         masses = np.delete(masses, heaviest_flavor)
         # Reduce the number of flavors by one

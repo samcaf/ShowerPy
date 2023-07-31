@@ -15,7 +15,8 @@ def test_Parton_init():
     parton = Parton(momentum, mass=mass, mother=mother,
                     daughters=daughters, pid=pid,
                     is_final_state=is_final_state,
-                    particle_type=particle_type, NC=NC)
+                    particle_type=particle_type, NC=NC,
+                    color_rep='fundamental')
 
     assert parton.momentum.as_list() == momentum
     assert parton.mass == mass
@@ -24,7 +25,7 @@ def test_Parton_init():
     assert parton.pid == pid
     assert parton.is_final_state == is_final_state
     assert parton.metadata['particle_type'] == particle_type.lower()
-    assert parton.metadata['CR'] == CF(NC)
+    assert parton.metadata['color_rep'] == 'fundamental'
 
 
 def test_Parton_split():

@@ -18,7 +18,7 @@ def test_ShowerAlgorithm_init():
 
 def test_ShowerAlgorithm_call():
     # Define a dummy ShowerAlgorithm class for testing
-    z0 = 0.5
+    z0 = 0.45
     theta0 = 0.3
     class DummyShowerAlgorithm(ShowerAlgorithm):
         def generation_pdf(self, momentum_fraction, theta, **kwargs):
@@ -45,8 +45,10 @@ def test_ShowerAlgorithm_call():
 
     assert len(jet) == 3
     assert jet[0].momentum == seed_parton.momentum
-    assert jet[0].daughters[0].momentum.mag() == (1-z0) * seed_parton.momentum.mag()
-    assert jet[0].daughters[1].momentum.mag() == z0 * seed_parton.momentum.mag()
+    assert jet[0].daughters[0].momentum.mag() == pytest.approx((1-z0) *
+                                                   seed_parton.momentum.mag())
+    assert jet[0].daughters[1].momentum.mag() == pytest.approx(z0 *
+                                                   seed_parton.momentum.mag())
     assert angle(jet[0].daughters[0].momentum,
                  jet[0].daughters[1].momentum) == pytest.approx(theta0)
 

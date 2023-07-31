@@ -1,6 +1,7 @@
 import random
 import numpy as np
 
+from showerpy.qcd_utils import CF, CA
 from showerpy.parton import Parton
 from showerpy.shower_algorithm import ShowerAlgorithm
 
@@ -21,7 +22,6 @@ class AngularityShowerAlgorithm(ShowerAlgorithm):
                  split_soft=False, use_veto=True,
                  **kwargs):
         super().__init__(cutoff_scale, split_soft, use_veto)
-
         self.beta = kwargs.get('beta', 2)
         self.alpha = kwargs.get('alpha', 1.5)
 
@@ -29,8 +29,8 @@ class AngularityShowerAlgorithm(ShowerAlgorithm):
                        **kwargs):
         """The probability density function for the generation
         of the scales associated with emissions."""
+        eff_coupling = kwargs.get('eff_coupling', self.alpha)
         # DEBUG: factor of pi missing?
-        eff_coupling = self.alpha * kwargs['CR']
         return 2 * eff_coupling / (momentum_fraction * theta)
 
     def true_pdf(self, momentum_fraction, theta, **kwargs):
@@ -43,7 +43,8 @@ class AngularityShowerAlgorithm(ShowerAlgorithm):
         return momentum_fraction * theta**self.beta
 
 
-    def random_z_and_theta(self, scale: float) -> (float, float):
+    def random_z_and_theta(self, scale: float,
+                           **kwargs) -> (float, float):
         """A method which returns a (log-uniform) random z and theta
         given an input scale (an angularity)."""
         rand  = random.random()
@@ -51,23 +52,6 @@ class AngularityShowerAlgorithm(ShowerAlgorithm):
         theta = (2.*scale)**((1-rand) / self.beta)
 
         return z, theta
-
-    def random_emission_scale(self, initial_scale: float,
-                              **kwargs) -> float:
-        """A method which returns a random emission angularity
-        given the initial scale."""
-        eff_coupling = self.alpha * kwargs['CR']
-        eff_coupling = eff_coupling / (np.pi * self.beta)
-        rand = random.random()
-        final_scale = np.exp(-np.sqrt(np.log(2.*initial_scale)**2.
-                                    - np.log(rand)/eff_coupling)
-                          ) / 2.
-        return final_scale
-        # Note: there is a typo in Eqn 5.4 of
-        # https://arxiv.org/pdf/1307.1699.pdf#page=18&zoom=200,0,300%5D
-        # (a stray factor of 2 on the RHS),
-        # but the conclusion in Equation 5.5, which we use
-        # here, is correct
 
 
 # =====================================
@@ -78,6 +62,7 @@ class GaugeTheoryShowerAlgorithm(AngularityShowerAlgorithm):
                  split_soft=False, use_veto=True,
                  **kwargs):
         super().__init__(cutoff_scale, split_soft, use_veto, **kwargs)
+        self.NC = kwargs.get('NC', 3)
 
         # - - - - - - - - - - - - - - - - -
         # Coupling setup
@@ -120,17 +105,76 @@ class GaugeTheoryShowerAlgorithm(AngularityShowerAlgorithm):
         self.splitting_function = splitting_function
 
 
+    def quadratic_casimir(self, color_rep):
+        """The quadratic Casimir operator for a given color representation."""
+        CR = None
+        if isinstance(color_rep, str):
+            if color_rep.lower() in ['fundamental', 'f']:
+                CR = CF(self.NC)
+            elif color_rep.lower() in ['adjoint', 'a']:
+                CR = CA(self.NC)
+        if CR is None:
+            raise ValueError("Invalid color representation "
+                             f"{color_rep}.")
+        return CR
+
+
+    def generation_pdf(self, momentum_fraction, theta,
+                       **kwargs):
+        """The probability density function for the generation
+        of the scales associated with emissions.
+        """
+        eff_coupling = self.alpha
+        try:
+            eff_coupling *= self.quadratic_casimir(kwargs['color_rep'])
+        except KeyError as exc:
+            raise KeyError("Must specify a colour representation "
+                           "for the shower") from exc
+        # DEBUG: factor of pi missing?
+        return 2 * eff_coupling / (momentum_fraction * theta)
+
+
     def true_pdf(self, momentum_fraction, theta, **kwargs):
         """The true probability density function associated with
         the splitting of a parton."""
         eff_coupling = self.coupling(self.get_scale(momentum_fraction, theta),
                                     **kwargs)
-        eff_coupling *= kwargs['CR']
+        try:
+            eff_coupling *= self.quadratic_casimir(kwargs['color_rep'])
+        except KeyError as exc:
+            raise KeyError("Must specify a colour representation "
+                           "for the shower") from exc
 
         splitting_fn = self.splitting_function(momentum_fraction, **kwargs)
 
         # DEBUG: Not sure if I want to use p(z)/theta this way -- a bit of a lie
-        return eff_coupling * splittting_fn / theta
+        # DEBUG:     also, missing factor of pi?
+        return eff_coupling * splitting_fn / theta
+
+
+    def random_emission_scale(self, initial_scale: float,
+                              **kwargs) -> float:
+        """A method which returns a random emission angularity
+        given the initial scale."""
+        eff_coupling = self.alpha
+        try:
+            eff_coupling *= self.quadratic_casimir(kwargs['color_rep'])
+        except KeyError as exc:
+            raise KeyError("Must specify a colour representation "
+                           "for the shower") from exc
+
+        eff_coupling = eff_coupling / (np.pi * self.beta)
+        rand = random.random()
+        final_scale = np.exp(-np.sqrt(np.log(2.*initial_scale)**2.
+                                    - np.log(rand)/eff_coupling)
+                          ) / 2.
+        return final_scale
+        # Note: there is a typo in Eqn 5.4 of
+        # https://arxiv.org/pdf/1307.1699.pdf#page=18&zoom=200,0,300%5D
+        # (a stray factor of 2 on the RHS),
+        # but the conclusion in Equation 5.5, which we use
+        # here, is correct
+
 
 
 def qcd_shower_algorithm(cutoff_scale: float = 1e-8,
@@ -140,7 +184,6 @@ def qcd_shower_algorithm(cutoff_scale: float = 1e-8,
                          NC: int = 3,
                          accuracy: str = 'MLL',
                          masses=quark_masses,
-                         mu_freeze=0,
                          **kwargs
                          ) -> ShowerAlgorithm:
     """
@@ -150,10 +193,20 @@ def qcd_shower_algorithm(cutoff_scale: float = 1e-8,
         NC: int
         radius: float
     """
-    return GaugeTheoryShowerAlgorithm(cutoff_scale=cutoff_scale,
-                                      alpha0=alpha0, mu0=mu0,
-                                      NF=NF, NC=NC,
-                                      accuracy=accuracy,
-                                      masses=masses,
-                                      mu_freeze=mu_freeze,
-                                      **kwargs)
+    if accuracy.lower() == 'll':
+        use_veto = False
+        assert kwargs.pop('use_veto', False) == False,\
+            "Cannot use veto with LL accuracy"
+    else:
+        use_veto = kwargs.pop('use_veto', True)
+
+    qcd_algorithm =  GaugeTheoryShowerAlgorithm(
+                                    cutoff_scale=cutoff_scale,
+                                    use_veto=use_veto,
+                                    alpha0=alpha0, mu0=mu0,
+                                    NF=NF, NC=NC,
+                                    accuracy=accuracy,
+                                    masses=masses,
+                                    **kwargs)
+
+    return qcd_algorithm

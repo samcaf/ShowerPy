@@ -74,7 +74,8 @@ class ShowerAlgorithm:
         given the initial scale."""
         raise NotImplementedError
 
-    def random_z_and_theta(self, scale: float) -> (float, float):
+    def random_z_and_theta(self, scale: float,
+                           **kwargs) -> (float, float):
         """A method which returns a random z and theta
         given a scale."""
         raise NotImplementedError
@@ -89,8 +90,10 @@ class ShowerAlgorithm:
         """
         accept_emission = False
         while not accept_emission:
-            emission_scale = self.random_emission_scale(mother_scale)
-            momentum_fraction, theta = self.random_z_and_theta(emission_scale)
+            emission_scale = self.random_emission_scale(mother_scale,
+                                                        **kwargs)
+            momentum_fraction, theta = self.random_z_and_theta(emission_scale,
+                                                               **kwargs)
 
             if not self.use_veto:
                 accept_emission = True

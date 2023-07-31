@@ -50,6 +50,7 @@ class Vector:
         """
         return math.sqrt(self.perp2())
 
+
     @property
     def theta(self):
         """Returns the angle between the vector and
@@ -126,22 +127,19 @@ class Vector:
         """
         assert self.mag() > 0, "Cannot split a zero vector."
 
-        # Preparing to return the harder split momentum first
-        if z != 0.5:
-            z = min(z, 1-z)
         assert 0 < z < 1, "Momentum fraction for splitting "\
                           "must be between 0 and 1."
 
         # Splitting the vector
-        khard = Vector(self.vector * (1-z))
-        ksoft = Vector(self.vector * z)
+        ksplit = Vector(self.vector * (1-z))
+        krem = Vector(self.vector * z)
 
         perp_vector = self.rand_perp_vector()
 
-        khard = khard.rotate_around(perp_vector, -theta/2)
-        ksoft = ksoft.rotate_around(perp_vector, theta/2)
+        ksplit = ksplit.rotate_around(perp_vector, -theta/2)
+        krem = krem.rotate_around(perp_vector, theta/2)
 
-        return khard, ksoft
+        return ksplit, krem
 
 
 def contract(lhs, rhs, metric=None):
@@ -175,7 +173,7 @@ def rand_perp_vector(vector):
         perp_vector.vector = np.cross(vector.vector, ref_vec)
 
     rot_angle = random.random() * 2. * math.pi
-    perp_vector = perp_vector.rotate_around(vector, rot_angle)
+    perp_vector = perp_vector.rotate_around(vector, rot_angle).unit()
 
     return perp_vector
 
